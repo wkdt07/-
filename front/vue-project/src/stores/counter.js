@@ -367,9 +367,9 @@ import { defineStore } from 'pinia';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 
+const DJANGO_URL = 'http://127.0.0.1:8000';
 
 export const useCounterStore = defineStore('counter', () => {
-  const DJANGO_URL = 'http://127.0.0.1:8000';
   const articles = ref([]);
   const token = ref(null);
   const comments = ref([]);
@@ -382,17 +382,22 @@ export const useCounterStore = defineStore('counter', () => {
 
   
   const isLogin = computed(() => {
-    return token.value !== null && userInfo.value !== null && userInfo.value.username !== undefined;
+    return token.value !== null;
   });
-  
   // 사용자 정보 변경 감지
-  watch(userInfo, () => { //특정 값을 찾기 위한 username
+  watch(userInfo, () => {
     userContractDeposits.value = userInfo.value?.contract_deposit || [];
     userContractSavings.value = userInfo.value?.contract_saving || [];
   });
 
-  const getUserInfo = async (username) => {
-    if(!username) return;
+  watch(isLogin,(newVal)=>{
+    if (newVal){
+      getUserInfo()
+    }
+  })
+
+  const getUserInfo = async () => {
+    if(!userInfo.value) return;
     try {
       const response = await axios.get(`${DJANGO_URL}/users/${username}/info/`, {
         headers: {
@@ -400,15 +405,10 @@ export const useCounterStore = defineStore('counter', () => {
         }
       });
       userInfo.value = response.data;
-      console.log('getUserInfo의 response=',response.data)
-      console.log('getUserInfo 이후의 userInfo.value',userInfo.value)
-
     } catch (err) {
       console.log(err);
     }
   };
-
-
   const getComments = async (article_pk) => {
     try {
       const response = await axios.get(`${DJANGO_URL}/articles/${article_pk}/comments/`, {
@@ -451,26 +451,21 @@ export const useCounterStore = defineStore('counter', () => {
 
   const logIn = async (payload) => {
     const { username, password } = payload;
-    console.log(payload)
     try {
       const res = await axios.post(`${DJANGO_URL}/accounts/login/`, { username, password });
       console.log('로그인이 완료되었습니다.');
       token.value = res.data.key;
-      console.log(username)
-      console.log(password)
-      await getUserInfo(username)
+  
       // 로그인 후 사용자 정보 가져오기
-      // const userInfoResponse = await axios.get(`${DJANGO_URL}/accounts/${username}/info/`, {
-      //   headers: {
-      //     Authorization: `Token ${token.value}`
-      //   }
-      // });
-      // userInfo.value = userInfoResponse.data;
-      console.log('userInfo=',userInfo.value)
+      const userInfoResponse = await axios.get(`${DJANGO_URL}/users/${username}/info/`, {
+        headers: {
+          Authorization: `Token ${token.value}`
+        }
+      });
+      userInfo.value = userInfoResponse.data;
       userContractDeposits.value = userInfo.value.contract_deposit || [];
       userContractSavings.value = userInfo.value.contract_saving || [];
-      // console.log('userInfoResponse=',userInfoResponse)
-      console.log('userInfo=',userInfo)
+  
       router.push({ name: 'ArticleView' });
     } catch (err) {
       alert('잘못된 아이디, 혹은 패스워드입니다.\n다시 시도해주세요.');
@@ -533,17 +528,15 @@ export const useCounterStore = defineStore('counter', () => {
   };
 
   // 사용자 정보를 가져오는 함수
-  const userArticles = ref([])
-  const userComments = ref([])
+  const userArticles = ref(null)
+  const userComments = ref(null)
   const getUserArticles = async (userId) => {
     try {
-      const response = await axios.get(`${DJANGO_URL}/users/${userId}/articles/`, {
+      const response = await axios.get(`${DJANGO_URL}/accounts/${userId}/articles/`, {
         headers: {
           Authorization: `Token ${token.value}`
         }
       });
-      console.log('article data=',response.data)
-
       userArticles.value = response.data;
     } catch (error) {
       console.log(error);
@@ -551,13 +544,12 @@ export const useCounterStore = defineStore('counter', () => {
   };
   const getUserComments = async (userId) => {
     try {
-      const response = await axios.get(`${DJANGO_URL}/users/${userId}/comments/`, {
+      const response = await axios.get(`${DJANGO_URL}/accounts/${userId}/comments/`, {
         headers: {
           Authorization: `Token ${token.value}`
         }
       });
       userComments.value = response.data;
-      console.log('comment data=',response.data)
     } catch (error) {
       console.log(error);
     }
